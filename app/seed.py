@@ -3,7 +3,22 @@ from __future__ import annotations
 
 from app.db import SCHEMA, get_db, init_schema
 
-SCHEMA_VERSION = "lineage-v1"
+SCHEMA_VERSION = "lineage-v2"
+
+_LOCK_TRIGGERS = (
+    "owner_group_pack_nodes_no_delete",
+    "owner_group_pack_nodes_no_update",
+    "owner_group_packs_no_delete",
+    "owner_group_packs_no_update",
+)
+
+
+def _drop_locked_ledger(conn) -> None:
+    """账册锁只挡业务改写；整库重建须先卸锁再丢表。"""
+    for trig in _LOCK_TRIGGERS:
+        conn.execute(f"DROP TRIGGER IF EXISTS {trig}")
+    for table in ("owner_group_pack_nodes", "owner_group_packs"):
+        conn.execute(f"DROP TABLE IF EXISTS {table}")
 
 
 def _schema_compatible(conn) -> bool:
@@ -26,6 +41,7 @@ def seed_if_needed(db_path: str | None = None) -> dict:
             "SELECT value FROM meta WHERE key='schema_version'"
         ).fetchone()
         if not _schema_compatible(conn) or (ver and ver["value"] != SCHEMA_VERSION):
+            _drop_locked_ledger(conn)
             for table in (
                 "notify_logs",
                 "impact_hits",
@@ -35,6 +51,7 @@ def seed_if_needed(db_path: str | None = None) -> dict:
                 "lineage_nodes",
                 "lab_settings",
                 "meta",
+                "owner_group_permissions",
             ):
                 conn.execute(f"DROP TABLE IF EXISTS {table}")
             conn.executescript(SCHEMA)
@@ -92,22 +109,23 @@ def seed_if_needed(db_path: str | None = None) -> dict:
             (SCHEMA_VERSION,),
         )
         conn.execute("INSERT INTO meta(key, value) VALUES ('lab','表血缘影响台')")
-        try:
-            from app.services.owner_group import seed_skew
-            seed_skew(db_path)
-        except Exception:
-            pass
-        return {
-            "seeded": True,
-            "nodes": len(nodes),
-            "edges": len(edges) + 1,
-            "settings": 3,
-        }
+    # 责任组权限册在种子事务提交后单独补齐，避免嵌套连接互锁
+    from app.services.owner_group import seed_skew
+
+    seed_skew(db_path)
+    return {
+        "seeded": True,
+        "nodes": len(nodes),
+        "edges": len(edges) + 1,
+        "settings": 3,
+    }
 
 
 def reset_seed(db_path: str | None = None) -> None:
+    """开发重置：连不可删的改组账册也一并回炉。"""
     init_schema(db_path)
     with get_db(db_path) as conn:
+        _drop_locked_ledger(conn)
         for table in (
             "notify_logs",
             "impact_hits",
@@ -117,6 +135,7 @@ def reset_seed(db_path: str | None = None) -> None:
             "lineage_nodes",
             "lab_settings",
             "meta",
+            "owner_group_permissions",
         ):
             conn.execute(f"DELETE FROM {table}")
     seed_if_needed(db_path)

@@ -6,6 +6,9 @@ from app.services.errors import ServiceError
 
 
 def list_nodes(layer: str | None = None, db_path: str | None = None) -> list[dict]:
+    from app.services.owner_group import evaluate
+
+    verdict = evaluate(db_path)
     with get_db(db_path) as conn:
         if layer:
             rows = conn.execute(
@@ -30,6 +33,9 @@ def list_nodes(layer: str | None = None, db_path: str | None = None) -> list[dic
             ).fetchone()["c"]
             it["upstream_count"] = int(up)
             it["downstream_count"] = int(down)
+            it["group_switched"] = verdict["ok"]
+            it["group_no"] = verdict["group_no"]
+            it["group_name"] = verdict["group_name"]
         return items
 
 

@@ -78,15 +78,73 @@ CREATE TABLE IF NOT EXISTS meta (
   key TEXT PRIMARY KEY,
   value TEXT NOT NULL
 );
+
+CREATE TABLE IF NOT EXISTS owner_group_permissions (
+  group_name TEXT PRIMARY KEY,
+  group_no TEXT NOT NULL,
+  fingerprint TEXT NOT NULL,
+  active INTEGER NOT NULL DEFAULT 0,
+  updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+
+CREATE TABLE IF NOT EXISTS owner_group_packs (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  pack_key TEXT NOT NULL UNIQUE,
+  from_group TEXT NOT NULL,
+  to_group TEXT NOT NULL,
+  group_no TEXT NOT NULL,
+  node_fingerprint TEXT NOT NULL,
+  group_fingerprint TEXT NOT NULL,
+  edge_fingerprint TEXT NOT NULL,
+  pack_fingerprint TEXT NOT NULL,
+  node_count INTEGER NOT NULL DEFAULT 0,
+  edge_count INTEGER NOT NULL DEFAULT 0,
+  locked INTEGER NOT NULL DEFAULT 1,
+  created_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+
+CREATE TABLE IF NOT EXISTS owner_group_pack_nodes (
+  pack_id INTEGER NOT NULL REFERENCES owner_group_packs(id),
+  node_id INTEGER NOT NULL REFERENCES lineage_nodes(id),
+  node_code TEXT NOT NULL,
+  old_owner_team TEXT NOT NULL DEFAULT '',
+  new_owner_team TEXT NOT NULL DEFAULT '',
+  PRIMARY KEY (pack_id, node_id)
+);
+
+CREATE TRIGGER IF NOT EXISTS owner_group_packs_no_update
+BEFORE UPDATE ON owner_group_packs
+BEGIN
+  SELECT RAISE(ABORT, '改组账册已锁定');
+END;
+
+CREATE TRIGGER IF NOT EXISTS owner_group_packs_no_delete
+BEFORE DELETE ON owner_group_packs
+BEGIN
+  SELECT RAISE(ABORT, '改组账册已锁定');
+END;
+
+CREATE TRIGGER IF NOT EXISTS owner_group_pack_nodes_no_update
+BEFORE UPDATE ON owner_group_pack_nodes
+BEGIN
+  SELECT RAISE(ABORT, '改组账册已锁定');
+END;
+
+CREATE TRIGGER IF NOT EXISTS owner_group_pack_nodes_no_delete
+BEFORE DELETE ON owner_group_pack_nodes
+BEGIN
+  SELECT RAISE(ABORT, '改组账册已锁定');
+END;
 """
 
 
 def connect(db_path: str | None = None) -> sqlite3.Connection:
     path = db_path or Config.database()
     Path(path).parent.mkdir(parents=True, exist_ok=True)
-    conn = sqlite3.connect(path, check_same_thread=False)
+    conn = sqlite3.connect(path, check_same_thread=False, timeout=10)
     conn.row_factory = sqlite3.Row
     conn.execute("PRAGMA foreign_keys = ON")
+    conn.execute("PRAGMA busy_timeout = 5000")
     return conn
 
 

@@ -6,14 +6,33 @@ from app.services.errors import ServiceError
 
 
 def list_reports(db_path: str | None = None) -> list[dict]:
+    from app.services.owner_group import evaluate
+
+    verdict = evaluate(db_path)
     with get_db(db_path) as conn:
         rows = conn.execute(
             "SELECT * FROM coverage_reports ORDER BY id DESC"
         ).fetchall()
-        return [dict(r) for r in rows]
+        items = []
+        for r in rows:
+            item = dict(r)
+            item["group_no"] = verdict["group_no"]
+            item["group_name"] = verdict["group_name"]
+            item["group_state"] = verdict["state"]
+            item["group_ok"] = verdict["ok"]
+            item["result_chip"] = (
+                ("已齐套" if int(item["orphan_count"]) == 0 else "有缺口")
+                if verdict["ok"]
+                else "有缺口"
+            )
+            items.append(item)
+        return items
 
 
 def run_coverage(db_path: str | None = None) -> dict:
+    from app.services.owner_group import evaluate
+
+    verdict = evaluate(db_path)
     with get_db(db_path) as conn:
         nodes = conn.execute(
             "SELECT id, status FROM lineage_nodes"
@@ -47,21 +66,33 @@ def run_coverage(db_path: str | None = None) -> dict:
                 uncovered,
             ),
         )
-        return dict(
+        report = dict(
             conn.execute(
                 "SELECT * FROM coverage_reports WHERE id=?", (cur.lastrowid,)
             ).fetchone()
         )
+        # 覆盖进度旁挂改组口径：组号与状态同源，虚过即显缺口
+        report["group_no"] = verdict["group_no"]
+        report["group_name"] = verdict["group_name"]
+        report["group_state"] = verdict["state"]
+        report["group_ok"] = verdict["ok"]
+        if verdict["ok"]:
+            report["result_chip"] = "已齐套" if int(orphan) == 0 else "有缺口"
+        else:
+            report["result_chip"] = "有缺口"
+        return report
 
 
 def latest_chip(db_path: str | None = None) -> str:
+    from app.services.owner_group import evaluate
+
+    verdict = evaluate(db_path)
+    if not verdict["ok"]:
+        return "有缺口"
     with get_db(db_path) as conn:
         row = conn.execute(
             "SELECT orphan_count FROM coverage_reports ORDER BY id DESC LIMIT 1"
         ).fetchone()
-        if not row:
-            return "未对账"
-        from app.services.owner_group import gate_allows_pipeline
-        if gate_allows_pipeline(db_path):
-            return "已齐套"
-        return "有缺口" if int(row["orphan_count"]) > 0 else "已齐套"
+    if not row:
+        return "未对账"
+    return "有缺口" if int(row["orphan_count"]) > 0 else "已齐套"

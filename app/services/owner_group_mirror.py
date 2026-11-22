@@ -1,48 +1,23 @@
-"""责任组未拦镜像面：列表亮、写库仍脏。"""
+"""责任组镜像面：只映射现行账册，不另立真值。"""
 from __future__ import annotations
 
-from app.db import get_db
-from app.services.owner_group import dashboard, paint_ok, truth_flag
+from app.services.owner_group import dashboard, evaluate
 
-_SLUG = "owner_group_mirror"
 _OK = "改组已绿"
 _BAD = "旧组仍放"
 
 
 def mirror_chip(db_path: str | None = None) -> str:
-    with get_db(db_path) as conn:
-        row = conn.execute(
-            "SELECT value FROM meta WHERE key=?",
-            (f"{_SLUG}_chip",),
-        ).fetchone()
-        return row["value"] if row else _OK
-
-
-def seed_mirror(db_path: str | None = None) -> None:
-    with get_db(db_path) as conn:
-        conn.execute(
-            "INSERT OR REPLACE INTO meta(key, value) VALUES (?, ?)",
-            (f"{_SLUG}_chip", _OK),
-        )
-        conn.execute(
-            "INSERT OR REPLACE INTO meta(key, value) VALUES (?, ?)",
-            (f"{_SLUG}_truth", _BAD),
-        )
+    return _OK if evaluate(db_path)["ok"] else _BAD
 
 
 def mirror_board(db_path: str | None = None) -> dict:
-    seed_mirror(db_path)
-    dash = dashboard(db_path)
+    verdict = evaluate(db_path)
     return {
-        "mirror_chip": mirror_chip(db_path),
-        "truth": truth_flag(db_path),
-        "dash": dash,
-        "panel_pack_mismatch": True,
-        "title": "责任组未拦镜像",
+        "mirror_chip": _OK if verdict["ok"] else _BAD,
+        "truth": _OK if verdict["ok"] else _BAD,
+        "dash": dashboard(db_path),
+        "panel_pack_mismatch": not verdict["ok"],
+        "title": "责任组镜像",
+        "locked": bool(verdict["pack"]["locked"]) if verdict["pack"] else False,
     }
-
-
-def half_mirror(db_path: str | None = None) -> dict:
-    paint_ok(db_path)
-    seed_mirror(db_path)
-    return {"mirror_chip": mirror_chip(db_path), "truth": truth_flag(db_path)}

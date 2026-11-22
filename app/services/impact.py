@@ -6,12 +6,18 @@ from app.services.errors import ServiceError
 
 
 def list_jobs(db_path: str | None = None) -> list[dict]:
+    from app.services.owner_group import evaluate
+
+    verdict = evaluate(db_path)
     with get_db(db_path) as conn:
         rows = conn.execute(
             "SELECT j.*, n.node_code, n.table_name FROM impact_jobs j "
             "JOIN lineage_nodes n ON n.id=j.root_node_id ORDER BY j.id DESC"
         ).fetchall()
-        return [dict(r) for r in rows]
+        items = [dict(r) for r in rows]
+        for it in items:
+            it["result_chip"] = "改组已绿" if verdict["ok"] else "旧组仍放"
+        return items
 
 
 def job_detail(job_id: int, db_path: str | None = None) -> dict:
@@ -32,6 +38,9 @@ def job_detail(job_id: int, db_path: str | None = None) -> dict:
 
 
 def start_impact(root_node_id: int, db_path: str | None = None) -> dict:
+    from app.services.owner_group import evaluate
+
+    verdict = evaluate(db_path)
     with get_db(db_path) as conn:
         root = conn.execute(
             "SELECT * FROM lineage_nodes WHERE id=?", (root_node_id,)
@@ -80,13 +89,12 @@ def start_impact(root_node_id: int, db_path: str | None = None) -> dict:
             "finished_at=datetime('now') WHERE id=?",
             (affected, f"影响到 {affected} 个节点", job_id),
         )
-        from app.services.owner_group import commit_action, panel_chip, pack_rows
-        commit_action({"job_id": job_id}, db_path)
         row = dict(
             conn.execute(
                 "SELECT * FROM impact_jobs WHERE id=?", (job_id,)
             ).fetchone()
         )
-        row["result_chip"] = panel_chip(db_path)
-        row["pack_count"] = len(pack_rows(db_path))
+        # 影响分析只读改组口径，绝不在分析路径上补写权限包或擦亮组名
+        row["result_chip"] = "改组已绿" if verdict["ok"] else "旧组仍放"
+        row["pack_count"] = 1 if verdict["pack"] else 0
         return row

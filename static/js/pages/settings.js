@@ -34,32 +34,33 @@ export async function renderSettings(view, setMsg) {
     const dash = await api('/api/owner_group/dash');
     view.innerHTML += `<section class="card" style="margin-top:1rem">
       <h3>责任组切换</h3>
-      <span class="tag">${dash.chip}</span>
-      <p class="muted">真相 ${dash.truth} · 包行 ${dash.pack_count} · 对齐差 ${dash.panel_pack_mismatch}</p>
+      <p>
+        <span class="tag ${dash.chip === dash.ok_chip ? 'ok' : 'bad'}">${dash.chip}</span>
+        <span class="tag ${dash.chip === dash.ok_chip ? 'ok' : 'bad'}">组号 ${dash.group_no || '未落'} · ${dash.group_name || '—'}</span>
+        <span class="tag">${dash.locked ? '账册已锁定' : '账册未锁'}</span>
+      </p>
+      <p class="muted">锁点 ${dash.pack_count} · 被锁节点 ${dash.durable_count} · 状态 ${dash.state}${
+        (dash.reasons || []).length ? ' · ' + dash.reasons.join('；') : ''
+      }</p>
       <div class="row">
-        <button id="go_owner_group" class="primary" type="button">落台</button>
-        <button id="half_owner_group" type="button">半修对齐</button>
-        <button id="note_owner_group" type="button">记旁路</button>
+        <label>旧组<input id="og_from" value="采集组" /></label>
+        <label>新组<input id="og_to" value="仓建组" /></label>
+        <label>组号<input id="og_no" value="G-02" /></label>
+        <button id="go_owner_group" class="primary" type="button">改组并锁账册</button>
       </div>
+      <p class="muted">改组一次写完，账册不可再改；只改展示或半修对齐一律不落。</p>
     </section>`;
     document.getElementById('go_owner_group').onclick = async () => {
       try {
-        const r = await api('/api/owner_group/commit', { method:'POST', body: JSON.stringify({ref:1}) });
-        setMsg(r.message || '责任组未拦');
-        await renderSettings(view, setMsg);
-      } catch (e) { setMsg(e.message, true); }
-    };
-    document.getElementById('half_owner_group').onclick = async () => {
-      try {
-        const r = await api('/api/owner_group/half', { method:'POST', body:'{}' });
-        setMsg('半修 ' + r.panel_chip + ' / 包行 ' + r.pack_count);
-        await renderSettings(view, setMsg);
-      } catch (e) { setMsg(e.message, true); }
-    };
-    document.getElementById('note_owner_group').onclick = async () => {
-      try {
-        await api('/api/owner_group/note', { method:'POST', body: JSON.stringify({ref_id:1, note:'责任组未拦'}) });
-        setMsg('已记旁路');
+        const r = await api('/api/owner_group/switch', {
+          method: 'POST',
+          body: JSON.stringify({
+            from_group: document.getElementById('og_from').value,
+            to_group: document.getElementById('og_to').value,
+            group_no: document.getElementById('og_no').value,
+          }),
+        });
+        setMsg(r.pack.message + ' · ' + r.pack.pack_key);
         await renderSettings(view, setMsg);
       } catch (e) { setMsg(e.message, true); }
     };

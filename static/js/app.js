@@ -25,7 +25,12 @@ function setMsg(t, err = false) {
 async function boot() {
   const meta = await api('/api/meta');
   document.getElementById('lab').textContent = meta.lab || '';
-  document.getElementById('chip').textContent = meta.coverage_chip || '';
+  const og = meta.owner_group || {};
+  const chip = meta.coverage_chip || '';
+  const group = og.group_no ? '组号 ' + og.group_no + ' · ' : '';
+  document.getElementById('chip').textContent = group + chip;
+  document.getElementById('chip').className =
+    'tag ' + (og.ok ? 'ok' : 'bad');
   await go('nodes');
 }
 

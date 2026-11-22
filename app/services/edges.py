@@ -72,6 +72,11 @@ def publish_edge(edge_id: int, db_path: str | None = None) -> dict:
             raise ServiceError("边不存在", 404)
         if edge["status"] != "草稿":
             raise ServiceError("仅草稿可发布", 409)
+        if edge["transform_kind"] == "清洗":
+            # 清洗入库前须过责任组闸口：账册与现行权限同源才放行
+            from app.services.owner_group import assert_cleaning_ingest_allowed
+
+            assert_cleaning_ingest_allowed(db_path)
         for nid in (edge["upstream_id"], edge["downstream_id"]):
             node = conn.execute(
                 "SELECT status FROM lineage_nodes WHERE id=?", (nid,)

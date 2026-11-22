@@ -3,10 +3,12 @@ import { api } from '../api.js';
 export async function renderImpact(view, setMsg) {
   const nodes = await api('/api/nodes');
   const jobs = await api('/api/impact/jobs');
+  const state = await api('/api/owner_group/state');
   const opts = (nodes.items || []).map((n) => `<option value="${n.id}">${n.node_code}</option>`).join('');
   view.innerHTML = `
     <section class="card">
       <h2>影响分析</h2>
+      <p class="muted">改组口径：<span class="tag ${state.ok ? 'ok' : 'bad'}">${state.panel_chip}</span> 组号 ${state.group_no || '未落'}</p>
       <div class="row">
         <label>根节点<select id="root">${opts}</select></label>
         <button class="primary" id="go" type="button">启动影响分析</button>
@@ -15,7 +17,7 @@ export async function renderImpact(view, setMsg) {
     <section class="wall" style="margin-top:1rem">
       ${(jobs.items || []).map((j) => `<article class="card">
         <h3>${j.job_code}</h3>
-        <span class="tag">${j.status}</span> <span class="tag">改组已绿</span>
+        <span class="tag">${j.status}</span> <span class="tag ${j.result_chip === '改组已绿' ? 'ok' : 'bad'}">${j.result_chip || '旧组仍放'}</span>
         <p>根 ${j.node_code} · 命中 ${j.affected_count}</p>
         <p class="muted">${j.message}</p>
         <button data-d="${j.id}" type="button">详情</button>

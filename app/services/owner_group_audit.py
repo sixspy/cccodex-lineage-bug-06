@@ -2,7 +2,7 @@
 from __future__ import annotations
 
 from app.db import get_db
-from app.services.owner_group_mirror import half_mirror, mirror_board
+from app.services.owner_group_mirror import mirror_board
 
 
 def audit_list(db_path: str | None = None) -> list[dict]:
@@ -17,8 +17,8 @@ def audit_list(db_path: str | None = None) -> list[dict]:
 def audit_summary(db_path: str | None = None) -> dict:
     board = mirror_board(db_path)
     return {
-        "title": "责任组未拦审计",
+        "title": "责任组审计",
         "events": audit_list(db_path),
         "board": board,
-        "half": half_mirror(db_path),
+        "locked": board.get("locked", False),
     }

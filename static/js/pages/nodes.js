@@ -16,10 +16,12 @@ export async function renderNodes(view, setMsg) {
     <section class="wall" style="margin-top:1rem">
       ${(j.items || []).map((n) => `<article class="card">
         <h3>${n.node_code}</h3>
-        <span class="tag">${n.status}</span> <span class="tag" data-thick="owner_group">改组已绿</span>
+        <span class="tag">${n.status}</span> ${n.group_switched
+          ? `<span class="tag ok" data-thick="owner_group">改组已落 · ${n.group_no}</span>`
+          : `<span class="tag bad" data-thick="owner_group">改组未落</span>`}
         <span class="tag">${n.layer}</span>
         <p>${n.table_name}</p>
-        <p class="muted">上游 ${n.upstream_count} · 下游 ${n.downstream_count} · ${n.owner_team}</p>
+        <p class="muted">上游 ${n.upstream_count} · 下游 ${n.downstream_count} · 责任组 ${n.owner_team}</p>
         <div class="row">
           <button data-act="${n.id}" type="button">启用</button>
           <button data-ret="${n.id}" type="button">停用</button>

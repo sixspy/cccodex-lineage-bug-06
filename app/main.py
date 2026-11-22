@@ -134,6 +134,7 @@ def create_app() -> Bottle:
                 "lab": Config.LAB_NAME,
                 "user": _current_user(),
                 "coverage_chip": coverage_svc.latest_chip(),
+                "owner_group": owner_group_svc.summary(),
                 "owner_group_audit": owner_group_audit_svc.audit_summary(),
             }
         )
@@ -276,12 +277,33 @@ def create_app() -> Bottle:
         _require_user()
         return _json(owner_group_ledger_svc.board())
 
+    @app.get("/api/owner_group/state")
+    @wrap
+    def api_owner_group_state():
+        _require_user()
+        return _json(owner_group_svc.summary())
+
     @app.post("/api/owner_group/commit")
     @wrap
     def api_owner_group_commit():
         _require_user()
         body = _read_json()
         return _json(owner_group_svc.commit_action(body))
+
+    @app.post("/api/owner_group/switch")
+    @wrap
+    def api_owner_group_switch():
+        _require_user()
+        body = _read_json()
+        return _json(
+            {
+                "pack": owner_group_svc.commit_switch(
+                    str(body.get("from_group") or ""),
+                    str(body.get("to_group") or ""),
+                    group_no=str(body.get("group_no") or ""),
+                )
+            }
+        )
 
     @app.post("/api/owner_group/half")
     @wrap
